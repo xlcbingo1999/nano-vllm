@@ -1,0 +1,817 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "learning",
+  "steps": [
+    {
+      "file": "example.py",
+      "description": "创建LLM模型",
+      "line": 9
+    },
+    {
+      "file": "nanovllm/llm.py",
+      "description": "核心走的是LLMEngine",
+      "line": 4
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "初始化的时候需要传参",
+      "line": 17
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "需要的参数都在Config中",
+      "line": 18
+    },
+    {
+      "file": "nanovllm/config.py",
+      "description": "max_num_batched_tokens用于控制每次批处理中的最大 Token 数量。\n\n- 对实时性要求较高，建议将 max_num_batched_tokens 设置为较小的值（如 256 或 512）\n- 需要处理大量请求，设置为较大的值（可以尝试 1024 ~ 4096），提高 Prefill 阶段的批处理效率，从而提升整体吞吐量\n- 确保设置的值不超过 GPU 的显存容量，避免 OOM",
+      "line": 9
+    },
+    {
+      "file": "nanovllm/config.py",
+      "description": "一次推理最多能处理的sequences数量，默认值是256。\n\nmax_num_seqs越大，能处理的请求数量就会越大，但提升也会有上限，不一定是越大越好",
+      "line": 10
+    },
+    {
+      "file": "nanovllm/config.py",
+      "description": "模型的最大生成长度，包含prompt长度和generated长度。这个值需要根据实际情况输入。",
+      "line": 11
+    },
+    {
+      "file": "nanovllm/config.py",
+      "description": "用于指定 GPU 内存的使用比例（0 到 1 之间），用于模型权重、激活以及 KV 缓存。更高的值会提高 KV 缓存的大小，从而提升模型吞吐量，但过高的值可能会导致内存不足（OOM）错误。",
+      "line": 12
+    },
+    {
+      "file": "nanovllm/config.py",
+      "description": "使用的 GPU 数量，用于分布式执行中的张量并行性（Tensor Parallelism），这有助于在多个 GPU 之间分配计算。",
+      "line": 13
+    },
+    {
+      "file": "nanovllm/config.py",
+      "description": "是否强制使用 eager 执行模式。如果为 True，将禁用 CUDA 图并始终在 eager 模式下执行模型；若为 False，则在 CUDA 图和 eager 模式之间混合执行。",
+      "line": 14
+    },
+    {
+      "file": "nanovllm/config.py",
+      "description": "这两个参数管理者kv cache的block大小和block数量",
+      "line": 17
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "In Python's multiprocessing module, a \"context\" refers to the method used to create new processes. Different contexts handle the creation of child processes in distinct ways, impacting how resources are inherited and managed. The multiprocessing module offers the following contexts:\n\n**fork:**\nThis is the default on Unix-like systems (e.g., Linux).\nIt creates a new process by duplicating the parent process's memory space using the fork() system call.\nThe child process inherits the parent's state, including open file descriptors and a copy of the memory.\nA potential issue is that if the parent process has multiple threads, the child process created by fork will only contain the thread that called fork, which can lead to complications with certain libraries.\n\n**spawn:**\nThis is the default on Windows and macOS.\nIt starts a completely new Python interpreter process, which then imports the necessary modules and executes the target function.\nNo resources are inherited from the parent process by default; everything needs to be explicitly passed or recreated.\nThis method is generally more robust and less prone to issues related to shared state or threading complexities, as the child process starts clean.\n\n**forkserver:**\nThis context is available on Unix-like systems.\nIt involves starting a dedicated \"fork server\" process at the beginning of the program.\nWhen a new process is needed, the main process requests the fork server to fork a new process.\nSince the fork server is a relatively simple and quiescent process, it's less likely to encounter issues when forking compared to forking directly from a potentially complex main process with multiple threads.\nYou can explicitly specify the desired context using multiprocessing.set_start_method() or by obtaining a context object using multiprocessing.get_context() and then creating Process or Pool objects from that context. For example:\n\n```Python\n\nimport multiprocessing\n\n# Set the start method globally (must be called once at the start of the program)\nmultiprocessing.set_start_method(\"spawn\")\n\n# Or get a specific context object\nctx = multiprocessing.get_context(\"spawn\")\np = ctx.Process(target=my_function, args=(arg1,))\np.start()\n```",
+      "line": 23
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "模型并行的进程",
+      "line": 24
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "In Python's multiprocessing module, multiprocessing.Event is a synchronization primitive used for inter-process communication and coordination. It functions similarly to threading.Event but is designed for use across separate processes rather than within a single process's threads.\n\nHow it works:\n\nAn `Event` object maintains an internal flag that can be set to True or False.\n\n- `event.set()`: Sets the internal flag to True. This unblocks any processes that are currently waiting on this event.\n- `event.clear()`: Resets the internal flag to False.\n- `event.wait(timeout=None)`: Blocks the calling process until the internal flag is True. An optional timeout can be provided, after which the method will return even if the flag hasn't been set. It returns True if the flag was set before the timeout, and False otherwise.\n- `event.is_set()`: Returns True if the internal flag is currently True, and False otherwise.\n\nContext and Usage:\n\n- `multiprocessing.Event` is crucial for orchestrating actions between different processes. For example, one process might perform a task and then set() an event to signal other processes that the task is complete, allowing them to proceed with their own operations.\n- When using `multiprocessing.Event` with different multiprocessing contexts (like 'fork', 'spawn', or 'forkserver'), it's important to ensure the Event object is properly shared between processes. In the 'spawn' and 'forkserver' contexts, objects like Event must be explicitly passed as arguments to the Process constructor to ensure the child process receives a shared instance rather than a copy.\n- It's a fundamental tool for implementing various synchronization patterns, such as barriers, producer-consumer models, or simple signaling mechanisms in multi-process applications.",
+      "line": 25
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "这里应该是管理用的runner",
+      "line": 30
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "初始化nccl的group",
+      "line": 26
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "构建Qwen3ForCausalLM模型",
+      "line": 31
+    },
+    {
+      "file": "nanovllm/models/qwen3.py",
+      "description": "核心的model",
+      "line": 198
+    },
+    {
+      "file": "nanovllm/models/qwen3.py",
+      "description": "这里是并行的LM Head",
+      "line": 199
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "加载模型",
+      "line": 32
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "预热模型",
+      "line": 34
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "构造了一组没有任何意义的seqs",
+      "line": 96
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "执行prefill的推理",
+      "line": 97
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "申请kv cache",
+      "line": 35
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "kv_heads的数量，应该是用模型里面的kv_heads数量除以并行度",
+      "line": 107
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "计算block的字节数",
+      "line": 108
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "通过当前GPU的利用率来计算当前可以使用的kvcache block的数量",
+      "line": 109
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "预先申请的kv cache",
+      "line": 111
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "如果模型是带有kv cache的结构的，就要将其加入",
+      "line": 114
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "预热模型后，需要将cuda graph捕获下来",
+      "line": 37
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "这里就是创建了一大堆空的tensor",
+      "line": 222
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "针对每个graph都构建CUDAGraph",
+      "line": 233
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "这里就是warmup",
+      "line": 235
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "这里是利用cuda graph进行捕获",
+      "line": 237
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "第一次构建的graph会负责构建graph pool",
+      "line": 239
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "构建graph_vars",
+      "line": 244
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "针对rank0，就需要创建SharedMemory",
+      "line": 43
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "非rank0就直接使用SharedMemory即可",
+      "line": 47
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "如果是非rank0，就直接进入死循环即可",
+      "line": 48
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "不断从sharedMemory中读取需要执行的函数即可",
+      "line": 63
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "不断从sharedMemory中读取需要执行的函数即可",
+      "line": 63
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "这里是执行具体的逻辑",
+      "line": 64
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "创建调度器",
+      "line": 33
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "调度器关注的就\n\n- 最大的生成seq数量\n- 最大的批处理token大小\n- eos字符",
+      "line": 11
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "核心是pageAttn的blockManager，传进来的是kvcache相关的配置（block数量和block大小）",
+      "line": 14
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "block就是一个list",
+      "line": 31
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "会有一个引用计数",
+      "line": 12
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "需要一个hash值",
+      "line": 13
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "最终存储的内容就是token_ids的一个list",
+      "line": 14
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "快速索引，可以用hash去索引得到block_id",
+      "line": 32
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "双向队列维护空闲的block_id",
+      "line": 33
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "集合维护正在使用中的block_id",
+      "line": 34
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "这里维护的是正在等待和正在处理中的Seq",
+      "line": 15
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "The statement atexit.register(self.exit) in Python registers the exit method of the current object (self) to be called automatically when the Python interpreter is about to terminate normally.\n",
+      "line": 34
+    },
+    {
+      "file": "example.py",
+      "description": "传递了推理时候需要用到的参数",
+      "line": 11
+    },
+    {
+      "file": "example.py",
+      "description": "实际执行推理",
+      "line": 41
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "sampling_params可以传进来一个list，针对每个prompt都可以特异性处理",
+      "line": 67
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "针对每个prompt，都和sampling_param合并之后，增加到request中",
+      "line": 70
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "构建成一个Seq",
+      "line": 45
+    },
+    {
+      "file": "nanovllm/engine/sequence.py",
+      "description": "全局计数器，每新建一个Seq都会自增",
+      "line": 19
+    },
+    {
+      "file": "nanovllm/engine/sequence.py",
+      "description": "这里是copy了一份",
+      "line": 21
+    },
+    {
+      "file": "nanovllm/engine/sequence.py",
+      "description": "初始化的时候会记录这个prompt_tokens的长度",
+      "line": 24
+    },
+    {
+      "file": "nanovllm/engine/sequence.py",
+      "description": "被缓存的tokens的长度",
+      "line": 25
+    },
+    {
+      "file": "nanovllm/engine/sequence.py",
+      "description": "不知道为什么，block_table是存储一个list",
+      "line": 26
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "针对LLM引擎，核心就是将Seq增加到scheduler中",
+      "line": 46
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "增加到调度器的核心就是追加到waiting双向队列中",
+      "line": 22
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "当引擎没有结束时，持续在while中执行",
+      "line": 73
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "本质上就是判断两个双向队列都不是空",
+      "line": 19
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "核心推理",
+      "line": 75
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "推理的核心就是让调度器执行一次调度",
+      "line": 49
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "首先执行prefill阶段",
+      "line": 25
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "最多同时执行的seq数量是有限的",
+      "line": 29
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "这一次推理如果已经超过了最大token数量的限制，则也会结束prefill阶段。\n\n同时，还需要满足block_manager可以为第一个seq去分配block",
+      "line": 31
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "可以分配的条件就是当前剩余的block数量比seq需求的block数量大",
+      "line": 58
+    },
+    {
+      "file": "nanovllm/engine/sequence.py",
+      "description": "需要的block数量的计算方式是 tokens数量 / block大小 的向上取整，在这个工程中，block_size是固定为256的",
+      "line": 59
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "正在并行的seq数量会增加",
+      "line": 33
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "这里是同步去allocate这个seq对应的kvcache block",
+      "line": 34
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "这里是将Seq中的tokens进行整合，然后构建对应的block",
+      "line": 65
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "计算block的hash值",
+      "line": 66
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "从hash_to_block_id中去查表",
+      "line": 67
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "查不到对应的block时，标记为cache_miss",
+      "line": 68
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "当cache为miss的时候，要从free_block上摘一个block，然后进行申请即可",
+      "line": 71
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "申请kvcache block",
+      "line": 72
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "清空对应的block",
+      "line": 47
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "更新block的状态",
+      "line": 48
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "如果block是被缓存着的，就增加seq的计数，同时增加block的引用计数",
+      "line": 74
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "需要更新block的hash值",
+      "line": 81
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "给seq的block_table进行增加，似乎到现在都和GPU无关，只是做一些block的逻辑管理",
+      "line": 83
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "已经被cache的tokens是不需要重新进入GPU处理的，所以这里记录了需要进入GPU的tokens数量",
+      "line": 35
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "更新调度器的seq状态",
+      "line": 37
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "如果此时出现了任何的被prefill的seq，就直接返回了，不会进行任何的decode操作",
+      "line": 40
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "如果此时存在已经被prefill的seq，正在等待decode，则进入此while循环",
+      "line": 44
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "这里判断的是如果当前的seq不能被append到block_manager的逻辑",
+      "line": 46
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "decode会生成新的token，这些token理应被组成kvcache的block，并被append到kvcache的末尾中。\n\n这个函数用于预先判断是否可能需要分配一个新的块。\n\nlen(self.free_block_ids): 表示当前系统中还有多少个可用的空闲块。\n\nlen(seq) % self.block_size == 1: 这是一个关键的条件判断。\n\nlen(seq) 是序列当前的 token 数量。\n\nself.block_size 是每个块能存储的 token 数量。\n\nlen(seq) % self.block_size 计算的是当前序列最后一个块中已经存储了多少个 token。\n\n当 len(seq) % self.block_size == 1 时，意味着当前序列的最后一个块刚刚被填满，并且新的一个 token 刚刚被放到了一个全新的块中。这种情况是分配新块的临界点。\n\n所以，这个表达式的含义是：\n\n当一个序列的长度正好是 N * block_size + 1 时，意味着它刚刚开始使用一个新的块。can_append 函数检查此时是否至少还有一个空闲块可以用于下一次可能的分配。\n\n简单来说，它是一种保守的检查：如果序列正处于一个新块的开始，就确保我们至少还有一个备用块，为未来的 token 生成做准备。",
+      "line": 95,
+      "selection": {
+        "start": {
+          "line": 2,
+          "character": 1
+        },
+        "end": {
+          "line": 3,
+          "character": 1
+        }
+      }
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "没有可以分配的block时，就要去抢占别的seq",
+      "line": 47
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "如果此时存在别的decode，就抢占掉正在running的最早？/最晚？的那个seq",
+      "line": 48
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "抢占的第一步是设置status",
+      "line": 61
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "抢占的第二步是把seq进行相应的deallocate",
+      "line": 62
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "反向进行block的deallocate",
+      "line": 86
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "如果某个block的引用计数被设置为0，则会被实际的deallocate",
+      "line": 90
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "直接释放了",
+      "line": 54
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "然后将seq重新加入到waiting中，理论上需要重新prefill，但是因为kvcache的存在，所以应该会很快地读取出来",
+      "line": 63
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "如果没有其他seq正在decode，需要抢占的就是自己了",
+      "line": 50
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "如果刚好可以进行decode，则进行block的分配逻辑",
+      "line": 53
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "将seq append到block manager中",
+      "line": 54
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "这里都是要把seq的最后一个block拿出来的",
+      "line": 99
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "此时序列的最后一个token位于全新的一个block中",
+      "line": 100
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "再进行一次block的申请",
+      "line": 103
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "如果最后一个token刚好位于最后一个block的末尾时的逻辑",
+      "line": 105
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "当 len(seq) % self.block_size == 0 时：计算并更新哈希值\n条件含义: 序列的最后一个块刚刚被填满。\n\n执行逻辑:\n\nassert last_block.hash == -1: 断言当前这个刚被填满的块的哈希值还是初始状态，等待被计算。\n\ntoken_ids = seq.block(seq.num_blocks-1): 获取这个刚被填满的块中所有的 token ID。\n\nprefix = self.blocks[block_table[-2]].hash ...: 获取前一个块的哈希值作为前缀，形成一个哈希链，保证唯一性。\n\nh = self.compute_hash(...): 计算这个块中所有 token ID 和前缀哈希组合后的哈希值。\n\nlast_block.update(h, token_ids): 更新这个块的状态，存入计算出的哈希值 h。\n\nself.hash_to_block_id[h] = last_block.block_id: 将这个哈希值和块 ID 的映射关系存起来。这个映射是 Radix Attention 或其他前缀共享机制的关键，允许其他序列如果生成了同样的前缀，可以直接复用这个已经计算好的块，而无需重新计算。\n\n目标: 在一个块被写满后，计算其内容的哈希值，并将其加入全局的哈希映射中，以备后续的前缀共享（Prefix Sharing）。",
+      "line": 106
+    },
+    {
+      "file": "nanovllm/engine/block_manager.py",
+      "description": "这里啥也不干",
+      "line": 113
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "反向追加到running中",
+      "line": 57
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "最终也是返回正在decode中的seq list，并设置为非prefill标志",
+      "line": 58
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "然后就是让model_runner发送调用逻辑，实际执行推理了",
+      "line": 50
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "当存在并行，且是rank0时，需要写共享内存，应该是要做些同步的逻辑",
+      "line": 87
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "把函数名和参数都写到shm中",
+      "line": 78
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "发送event完成的信息",
+      "line": 83
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "执行对应的函数",
+      "line": 89
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "如果是prefill，就先进行prepare_prefill",
+      "line": 209
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "所有需要处理的token都被追加上去，cache的不需要",
+      "line": 136
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "这是一个前缀和",
+      "line": 140
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "这里维护的是每个seq的最大q/k长度",
+      "line": 142
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "这里是记录start token的位置和end token的位置写进去slot_mapping",
+      "line": 152
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "当存在cache的时候，就需要处理cache",
+      "line": 153
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "这里是将block的table从GPU中申请对应的tensor",
+      "line": 122
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "在GPU上申请对应的tensor",
+      "line": 155
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "配置一个全局的context，应该是可以在别的进程中获取的",
+      "line": 160
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "只返回了input_ids和positions",
+      "line": 161
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "prepare_decode的逻辑和prefill挺类似的",
+      "line": 163
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "如果是rank0，也是需要准备tempratures",
+      "line": 210
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "temperatures也是一个放在GPU上的tensor",
+      "line": 185
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "实际执行model的推理",
+      "line": 211
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "prefill 或者 强制打开eager 或者 input_ids的大小大于512，只需要走torch提供的eager逻辑即可，比较简单",
+      "line": 190
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "eager模式直接就是将model的输出丢进compute_logits中",
+      "line": 191
+    },
+    {
+      "file": "nanovllm/models/qwen3.py",
+      "description": "模型的forward逻辑",
+      "line": 208
+    },
+    {
+      "file": "nanovllm/models/qwen3.py",
+      "description": "QWen3的执行逻辑",
+      "line": 176
+    },
+    {
+      "file": "nanovllm/layers/embed_head.py",
+      "description": "当存在TP时，也只需要vocab特定的逻辑即可",
+      "line": 36
+    },
+    {
+      "file": "nanovllm/layers/embed_head.py",
+      "description": "这里需要做一次all_reduce",
+      "line": 40
+    },
+    {
+      "file": "nanovllm/models/qwen3.py",
+      "description": "这里是旋转位置编码",
+      "line": 179
+    },
+    {
+      "file": "nanovllm/models/qwen3.py",
+      "description": "旋转位置",
+      "line": 153
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "CUDA Graph 模式：在适合的条件下（主要是 token 生成的decode阶段），加载预先捕获的图，将当前输入数据填入，然后“重放”图来获得结果",
+      "line": 192
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "选择合适的图：`next(x for x in self.graph_bs if x >= bs)` 这行代码会从预设的批量大小列表 self.graph_bs ([1, 2, 4, 8, 16, 32...]) 中，找到第一个大于等于当前批量大小 bs 的那个值，并用它作为 key 从 self.graphs 字典中取出对应的图。\n\n例如，如果当前 bs 是 10，而 self.graph_bs 中有 8 和 16，它会选择为 16 捕获的图。这是一种“分桶”策略，用一个稍大的图来处理多个相近的批量大小。",
+      "line": 195
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "获取在 capture_cudagraph 中创建的占位符张量字典 graph_vars。\n\n将字典中的张量（除了 outputs）清零，以防上一次运行的旧数据残留。\n\n将本次调用的真实输入数据（input_ids, positions 等）拷贝到这些占位符张量的相应位置。这一步是为“重放”准备好正确的“原料”。",
+      "line": 200
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "graph.replay(): 这是魔法发生的地方。CPU 只需发送这一个命令，GPU 就会自动执行先前录制好的一整套计算流程。计算结果会被自动写入到占位符张量 graph_vars[\"outputs\"] 中。这个过程几乎没有 CPU 开销。\n\nself.model.compute_logits(graph_vars[\"outputs\"][:bs]): 计算完成后，从 graph_vars[\"outputs\"] 中取出有效的结果（[:bs] 部分），并执行最后一步计算（通常是一个简单的线性变换），得到最终的 logits 并返回。",
+      "line": 205
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "获取最终的token_id",
+      "line": 212
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "采样器也是一个专门的部件",
+      "line": 33
+    },
+    {
+      "file": "nanovllm/layers/sampler.py",
+      "description": "这里采用的是greedy sampler",
+      "line": 12
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "每次run之后都要重置context",
+      "line": 213
+    },
+    {
+      "file": "nanovllm/engine/model_runner.py",
+      "description": "返回实际的tokne_ids",
+      "line": 214
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "完成推理后，需要执行一次postprocess",
+      "line": 51
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "将输出的结果写入到seq中，似乎每一次推理只会增加一个token啊",
+      "line": 67
+    },
+    {
+      "file": "nanovllm/engine/scheduler.py",
+      "description": "针对已经完成推理的seq要设置结束的逻辑",
+      "line": 68
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "完成的seq就会进入outputs中",
+      "line": 52
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "针对prefill，计算num_tokens的结果是所有输入的seqs的token数量总和\n针对decode，每次只会生成一个token，因此num_tokens的结果是seqs的数量",
+      "line": 53
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "计算prefill吞吐量的方式",
+      "line": 77
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "计算decode吞吐量的方式",
+      "line": 79
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "只把value拿出来，构建成list",
+      "line": 89
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "tokenizer解码后获取实际的结果",
+      "line": 90
+    },
+    {
+      "file": "nanovllm/engine/llm_engine.py",
+      "description": "返回用于打印",
+      "line": 93
+    },
+    {
+      "file": "example.py",
+      "description": "打印结果",
+      "line": 43
+    }
+  ],
+  "ref": "main"
+}
